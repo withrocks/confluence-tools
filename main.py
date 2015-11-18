@@ -40,7 +40,8 @@ class ConfluenceProvider:
     def get_spaces(self):
         return self._get("/rest/api/space")["results"]
 
-    def get_diff_report(self, current, previous):
+    @staticmethod
+    def get_diff_report(current, previous):
         # TODO: Find built-in for this
         def by_id(dictionary):
             return {item["id"]: item for item in dictionary}
@@ -48,16 +49,66 @@ class ConfluenceProvider:
         current_by_id = by_id(current)
         previous_by_id = by_id(previous)
 
-        all_keys = set(current_by_id.keys()) & set(previous_by_id.keys())
+        both = set(current_by_id.keys()) & set(previous_by_id.keys())
+        only_in_current = set(current_by_id.keys()) - set(previous_by_id.keys())
+        only_in_previous = set(previous_by_id.keys()) - set(current_by_id.keys())
 
         report = dict()
-        report["changed"] = [current_by_id[key] for key in all_keys
+        report["changed"] = [current_by_id[key] for key in both
                              if current_by_id[key]["version"] != previous_by_id[key]["version"]]
-        report["new"] = [current_by_id[key] for key in all_keys
-                         if key not in previous_by_id]
-        report["deleted"] = [previous_by_id[key] for key in all_keys
-                             if key not in current_by_id]
+        report["new"] = [current_by_id[key] for key in only_in_current
+                         if key not in previous_by_id.keys()]
+        report["deleted"] = [previous_by_id[key] for key in only_in_previous
+                             if key not in current_by_id.keys()]
         return report
+
+    def get_diff_report_as_html(self, prev_version, curr_version, current, previous):
+        html = []
+        report = self.get_diff_report(current, previous)
+        # TODO: Move to template files
+        version_table = """
+        <table>
+          <tbody>
+            <tr>
+              <th>Current version</th>
+              <td colspan="1">{}</td>
+            </tr>
+          <tr>
+            <th colspan="1">Previous version</th>
+            <td colspan="1">{}</td>
+          </tr>
+          </tbody>
+        </table>
+        """.format(curr_version, prev_version)
+
+        html.append(version_table)
+        html.append("<h2>Changed</h2>")
+        for item in report["changed"]:
+            html.append("<p>{}</p>".format(item["title"]))
+        return "".join(html)
+
+    def get_content(self, content_id, expand_body=False):
+        return self._get("/rest/api/content/{}{}".format(content_id, "?expand=body.storage" if expand_body else ""))
+
+    def update_page(self, content_id, html):
+        print "Fetching last version of page with id={}...".format(content_id)
+        content = self.get_content(content_id)
+        version = int(content["version"]["number"])
+        print "Current version is {}".format(version)
+        data = {
+            "id": content_id,
+            "type": "page",
+            "title": "Version History",
+            "body": {
+                "storage": {
+                    "value": html,
+                    "representation": "storage"
+                }
+            },
+            "version": {"number": version + 1}
+        }
+        self._put("/rest/api/content/{}".format(content_id), data)
+        print "Successfully updated page with id={}".format(content_id)
 
     def _get(self, resource):
         full_url = "{}{}".format(self.url, resource)
@@ -67,15 +118,22 @@ class ConfluenceProvider:
         else:
             raise Exception(resp.text)
 
+    def _put(self, resource, data):
+        full_url = "{}{}".format(self.url, resource)
+        resp = requests.put(full_url, json=data, auth=(self.user, self.pwd))
+        if resp.status_code != 200:
+            raise Exception(resp.text)
+
 @click.command()
-@click.argument("space")
+@click.option("--space")
+@click.option("--config")
 @click.option("--url")
 @click.option("--user")
 @click.option("--pwd")
 @click.option("--current", default="1.0.0")
 @click.option("--previous")
 @click.option("--path", default=".")
-def docdiff(space, url, user, pwd, current, previous, path):
+def docdiff(space, config, url, user, pwd, current, previous, path):
     """
     Returns all pages in the space that have changed since last released version.
 
@@ -94,33 +152,37 @@ def docdiff(space, url, user, pwd, current, previous, path):
          Readers can now easily see what changed since they last read the documentation
     """
     # TODO: Paging, only works for first 25
+    import yaml
+    if config:
+        with open(config) as f:
+            config_obj = yaml.load(f)
+            url = url or config_obj["url"]
+            user = user or config_obj["user"]
+            pwd = pwd or config_obj["pwd"]
+            space = space or config_obj["space"]
 
     provider = ConfluenceProvider(url, user, pwd)
+
+    #version_history_id = "2785691"
+    #print provider.get_content(version_history_id, True)
     print "Determining the meta file for space={}...".format(space)
     current_diff = list(provider.get_diff_meta_file(space))
 
     outfile = os.path.join(path, "confluence-{}-{}.version".format(space, current))
     print "Saving diff in '{}'".format(outfile)
     with open(outfile, 'w') as f:
-        json.dump(current_diff, f)
+        json.dump(current_diff, f, sort_keys=True, indent=4)
 
     if previous:
         infile = os.path.join(path, "confluence-{}-{}.version".format(space, previous))
         print "Reading previous data from '{}'".format(infile)
         with open(infile, 'r') as f:
             previous_diff = json.load(f)
-            report = provider.get_diff_report(current_diff, previous_diff)
-            print "Changed:"
-            for item in report["changed"]:
-                print item
-
-            print "New"
-            for item in report["new"]:
-                print item
-
-            print "Deleted"
-            for item in report["deleted"]:
-                print item
+            html = provider.get_diff_report_as_html(previous, current, current_diff, previous_diff)
+            print html
+            # TODO: Query for the page containing the version hist
+            version_history_id = "2785691"
+            provider.update_page(version_history_id, html)
     else:
         print "Previous version not supplied, nothing to diff"
 
