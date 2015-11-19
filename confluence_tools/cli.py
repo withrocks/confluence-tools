@@ -6,12 +6,12 @@ import json
 
 
 @click.command()
+@click.argument("current")
 @click.option("--space")
 @click.option("--config")
 @click.option("--url")
 @click.option("--user")
 @click.option("--pwd")
-@click.option("--current", default="1.0.0")
 @click.option("--previous")
 @click.option("--path", default=".")
 def docdiff(space, config, url, user, pwd, current, previous, path):
@@ -45,7 +45,6 @@ def docdiff(space, config, url, user, pwd, current, previous, path):
     if not url or not user or not pwd or not space:
         raise click.UsageError("Missing one of url, user, pwd, space either on cmd line or in config")
 
-
     provider = ConfluenceProvider(url, user, pwd)
 
     """
@@ -57,7 +56,7 @@ def docdiff(space, config, url, user, pwd, current, previous, path):
     current_diff = list(provider.get_diff_meta_file(space))
 
     outfile = os.path.join(path, "confluence-{}-{}.version".format(space, current))
-    print "Saving diff in '{}'".format(outfile)
+    print "Saving versions in '{}'".format(outfile)
     with open(outfile, 'w') as f:
         json.dump(current_diff, f, sort_keys=True, indent=4)
 
@@ -68,11 +67,14 @@ def docdiff(space, config, url, user, pwd, current, previous, path):
             previous_diff = json.load(f)
             report = provider.get_diff_report(current_diff, previous_diff)
             html = ConfluenceContent.get_diff_report_as_html(previous, current, report, url)
+
+            print "Updating Confluence with latest info..."
             # TODO: Query for the page containing the version hist
             version_history_id = "2785691"
             provider.update_page(version_history_id, html)
     else:
         print "Previous version not supplied, nothing to diff"
+
 
 def cli_main():
     docdiff()
