@@ -27,15 +27,17 @@ class ConfluenceProvider:
         return res[0]
 
     def get_space_content_history(self, space_key):
-        page = self._get("/rest/api/space/{}/content{}?expand=version".format(space_key, ""))["page"]
-        #print page["start"], page["size"], page["limit"], len(page["results"])  # TODO: paging
-        for result in page["results"]:
-            yield {
-                "id": result["id"],
-                "version": result["version"]["number"],
-                "url": result["_links"]["tinyui"],
-                "title": result["title"]
-            }
+        #import logging
+        #logging.basicConfig(level=logging.DEBUG)
+        pages = list(self._get_paged("/rest/api/space/{}/content".format(space_key, ""), {"expand": "version"}))
+        for page in pages:
+            for result in page["results"]:
+                yield {
+                    "id": result["id"],
+                    "version": result["version"]["number"],
+                    "url": result["_links"]["tinyui"],
+                    "title": result["title"]
+                }
 
     def get_spaces(self):
         return self._get("/rest/api/space")["results"]
@@ -86,9 +88,26 @@ class ConfluenceProvider:
         self._put("/rest/api/content/{}".format(content_id), data)
         print "Successfully updated page with id={}".format(content_id)
 
-    def _get(self, resource):
+    def _get_paged(self, resource, params):
+        while True:
+            print "Fetching a page..."
+            res = self._get(resource, params)
+            if "page" in res:
+                page = res["page"]
+            else:
+                page = res
+
+            yield page
+
+            # Check if there is more:
+            if "next" in page["_links"]:
+                resource = page["_links"]["next"]
+            else:
+                break
+
+    def _get(self, resource, params=None):
         full_url = "{}{}".format(self.url, resource)
-        resp = requests.get(full_url, auth=(self.user, self.pwd))
+        resp = requests.get(full_url, auth=(self.user, self.pwd), params=params)
         if resp.status_code == 200:
             return resp.json()
         else:
