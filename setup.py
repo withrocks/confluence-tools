@@ -12,7 +12,7 @@ setup(
     version='0.1.0',
     description='Tools for working with Confluence, in particular release management.',
     long_description=long_description,
-    url='https://github.com/withrocks/release-tools',
+    url='https://github.com/withrocks/confluence-tools',
     author='withrocks',
 
     license='MIT',
@@ -29,8 +29,6 @@ setup(
 
     keywords='development deployment release',
 
-    # You can just specify the packages manually here if your project is
-    # simple. Or you can use find_packages().
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
     install_requires=['requests', 'click'],
 
