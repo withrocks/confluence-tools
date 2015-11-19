@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 import os
 import requests
-import sys
 import click
 import json
+from content import ConfluenceContent
 
 
 class ConfluenceProvider:
@@ -62,67 +62,6 @@ class ConfluenceProvider:
                              if key not in current_by_id.keys()]
         return report
 
-    def get_diff_report_as_html(self, prev_version, curr_version, current, previous, url):
-        html = []
-        report = self.get_diff_report(current, previous)
-        # TODO: Move to template files
-        version_table = """
-        <table>
-          <tbody>
-            <tr>
-              <th>Current version</th>
-              <td colspan="1">{}</td>
-            </tr>
-          <tr>
-            <th colspan="1">Previous version</th>
-            <td colspan="1">{}</td>
-          </tr>
-          </tbody>
-        </table>
-        """.format(curr_version, prev_version)
-
-        change_table_templ = """
-        <table>
-          <tbody>
-            <tr>
-              <th>Page</th>
-              <th>Change</th>
-            </tr>
-          </tbody>
-          {rows}
-        </table>
-        """
-
-        change_row_templ = """
-        <tr>
-          <td>
-            <ac:link><ri:page ri:content-title="{content_title}" />
-            </ac:link>
-          </td>
-          <td>
-            <a href="{url}/pages/diffpagesbyversion.action?pageId={page_id}&amp;selectedPageVersions={curr}&amp;selectedPageVersions={prev}"> diff v{prev}..v{curr} </a>
-          </td>
-        </tr>
-        """
-
-        html.append(version_table)
-        html.append("<h2>Changed</h2>")
-        change_rows = []
-        for item in report["changed"]:
-            change_rows.append(change_row_templ.format(
-                content_title=item["title"],
-                url=url,
-                curr=2, prev=1, page_id=item["id"]))
-        change_rows_str = "".join(change_rows)
-        html.append(change_table_templ.format(rows=change_rows_str))
-
-        """
-        html.append("<h2>Added</h2>")
-        for item in report["new"]:
-            html.append("<p>{}</p>".format(item["title"]))
-        """
-
-        return "".join(html)
 
     def get_content(self, content_id, expand_body=False):
         return self._get("/rest/api/content/{}{}".format(content_id, "?expand=body.storage" if expand_body else ""))
@@ -218,7 +157,8 @@ def docdiff(space, config, url, user, pwd, current, previous, path):
         print "Reading previous data from '{}'".format(infile)
         with open(infile, 'r') as f:
             previous_diff = json.load(f)
-            html = provider.get_diff_report_as_html(previous, current, current_diff, previous_diff, url)
+            report = provider.get_diff_report(current_diff, previous_diff)
+            html = ConfluenceContent.get_diff_report_as_html(previous, current, report, url)
             # TODO: Query for the page containing the version hist
             version_history_id = "2785691"
             provider.update_page(version_history_id, html)
