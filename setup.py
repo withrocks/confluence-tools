@@ -30,7 +30,7 @@ setup(
     keywords='development deployment release',
 
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
-    install_requires=['requests[security]', 'click', 'pyyaml'],
+    install_requires=['requests[security]', 'click', 'pyyaml', 'suds'],
 
     # $ pip install -e .[dev,test]
     extras_require={

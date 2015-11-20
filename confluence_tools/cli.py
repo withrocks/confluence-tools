@@ -27,6 +27,7 @@ def cli(ctx, loglevel, whatif, config, url, user, pwd):
 
     if not url or not user or not pwd:
         raise click.UsageError("Missing some of url, user, pwd either on cmd line or in config")
+
     ctx.obj["url"] = url
     ctx.obj["user"] = user
     ctx.obj["pwd"] = pwd
@@ -75,6 +76,16 @@ def space_report(ctx, current, space, previous, path):
         provider.generate_report(current, previous, current_file, prev_file, whatif)
     else:
         print "Previous version not supplied, diff report will not be created"
+
+
+@cli.command("space-export", help="Exports the space as a pdf.")
+@click.argument("space")
+@click.argument("path")
+@click.pass_context
+def space_report(ctx, space, path):
+    provider = ConfluenceProvider(ctx.obj["url"], ctx.obj["user"], ctx.obj["pwd"])
+    print "Exporting {} to '{}'".format(space, path)
+    provider.export_space(space, path)
 
 
 def cli_main():
