@@ -14,6 +14,18 @@ class ConfluenceProvider:
         self.pwd = pwd
         self.logger = logger or logging.getLogger(__name__)
 
+    def create_page(self, space_key, parent):
+        data = {
+                    "type": "page",
+                    "title":"new page",
+                    "ancestors": [{"id": parent}],
+                    "space": {"key": space_key},
+                    "body": {
+                        "storage": {"value":"<p>This is a new page</p>","representation":"storage"}
+                    }
+                }
+
+
     def get_diff_meta_file(self, space_key):
         """
         Returns the diff history for a whole space from a particular time.
@@ -161,17 +173,23 @@ class ConfluenceProvider:
             else:
                 break
 
+    def _full_url(self, resource):
+        return "{}{}".format(self.url, resource)
+
     def _get(self, resource, params=None):
-        full_url = "{}{}".format(self.url, resource)
-        resp = requests.get(full_url, auth=(self.user, self.pwd), params=params)
+        resp = requests.get(self._full_url(resource), auth=(self.user, self.pwd), params=params)
         if resp.status_code == 200:
             return resp.json()
         else:
             raise Exception(resp.text)
 
     def _put(self, resource, data):
-        full_url = "{}{}".format(self.url, resource)
-        resp = requests.put(full_url, json=data, auth=(self.user, self.pwd))
+        resp = requests.put(self._full_url(resource), json=data, auth=(self.user, self.pwd))
+        if resp.status_code != 200:
+            raise Exception(resp.text)
+
+    def _post(self, resource, data):
+        resp = requests.post(self._full_url(resource), json=data, auth=(self.user, self.pwd))
         if resp.status_code != 200:
             raise Exception(resp.text)
 
