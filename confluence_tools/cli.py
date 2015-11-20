@@ -1,80 +1,81 @@
 import click
 from confluence_tools.main import ConfluenceProvider
-from content import ConfluenceContent
 import os
 import json
+import yaml
+import logging
 
 
-@click.command()
-@click.argument("current")
-@click.option("--space")
-@click.option("--config")
-@click.option("--url")
-@click.option("--user")
-@click.option("--pwd")
-@click.option("--previous")
-@click.option("--path", default=".")
-def docdiff(space, config, url, user, pwd, current, previous, path):
-    """
-    Returns all pages in the space that have changed since last released version.
+@click.group()
+@click.option('--loglevel')
+@click.option('--whatif/--not-whatif', default=False)
+@click.option("--config", help="Path to a config file that supplies any of [url, user, pwd, space]")
+@click.option("--url", help="URL of your Confluence instance")
+@click.option('--user')
+@click.option('--pwd')
+@click.pass_context
+def cli(ctx, loglevel, whatif, config, url, user, pwd):
+    if loglevel:
+        logging.basicConfig(level=loglevel)
 
-    Expected workflow:
-        - During a build, the documentation is built from Confluence (e.g. exporting a PDF)
-        - When doing this, the pipeline also calls this program, getting a file
-        called 'confluence-<spacekey>-#.#.#.version'
-        - This file is saved with that release. It contains a CSV file that lists all pages
-        and corresponding versions
-
-        - On the next build, the same process is repeated, except this program is called
-         with the --previous flag set (TODO: keep meta files in Confluence)
-        - A new meta file is created
-        - A human readable diff is created that shows which pages have changed between the releases
-        - This file can now be added to Confluence and exported with the the release.
-         Readers can now easily see what changed since they last read the documentation
-    """
-    # TODO: Paging, only works for first 25
-    import yaml
     if config:
         with open(config) as f:
             config_obj = yaml.load(f)
             url = url or config_obj["url"]
             user = user or config_obj["user"]
             pwd = pwd or config_obj["pwd"]
-            space = space or config_obj["space"]
 
-    if not url or not user or not pwd or not space:
-        raise click.UsageError("Missing one of url, user, pwd, space either on cmd line or in config")
+    if not url or not user or not pwd:
+        raise click.UsageError("Missing some of url, user, pwd either on cmd line or in config")
+    ctx.obj["url"] = url
+    ctx.obj["user"] = user
+    ctx.obj["pwd"] = pwd
+    ctx.obj["whatif"] = whatif
 
-    provider = ConfluenceProvider(url, user, pwd)
+    if whatif:
+        print "*** Running in whatif mode. No writes. ***"
 
+
+@cli.command("space-report",
+             help="Generate a metadata file with page versions for a space. Generates a diff report " +
+                  "if a previous metadata file is supplied")
+@click.argument("current")
+@click.argument("space")
+@click.option("--previous",
+              help="The previous version of the documentation/software. If provided, generates " +
+                   "a report of the changes under a page called 'Version History', which needs to exist in the space.")
+@click.option("--path", default=".", help="Path where metadata files will be read from/written to")
+@click.pass_context
+def space_report(ctx, current, space, previous, path):
     """
-    version_history_id = "2785691"
-    print provider.get_content(version_history_id, True)
-    return
-    """
-    print "Determining the meta file for space={}...".format(space)
-    current_diff = list(provider.get_diff_meta_file(space))
+    Creates a metadata file for the current state of ``space``. If
+    ``previous`` is also provided, creates a diff report between current and previous
+    and uploads it to Confluence.
 
-    outfile = os.path.join(path, "confluence-{}-{}.version".format(space, current))
-    print "Saving versions in '{}'".format(outfile)
-    with open(outfile, 'w') as f:
-        json.dump(current_diff, f, sort_keys=True, indent=4)
+    Metadata files exist at ``path``
+    """
+    whatif = ctx.obj["whatif"]
+    provider = ConfluenceProvider(ctx.obj["url"], ctx.obj["user"], ctx.obj["pwd"])
+    current_file = os.path.join(path, "confluence-{}-{}.version".format(space, current))
+    if os.path.isfile(current_file):
+        print "Previous metadata already exists for {} at {}".format(current, current_file)
+    else:
+        print "Determining the metadata for version={},space={}...".format(current, space)
+        current_diff = list(provider.get_diff_meta_file(space))
+        print "Saving metadata in '{}'".format(current_file)
+
+        if not whatif:
+            with open(current_file, 'w') as f:
+                json.dump(current_diff, f, sort_keys=True, indent=4)
 
     if previous:
-        infile = os.path.join(path, "confluence-{}-{}.version".format(space, previous))
-        print "Reading previous data from '{}'".format(infile)
-        with open(infile, 'r') as f:
-            previous_diff = json.load(f)
-            report = provider.get_diff_report(current_diff, previous_diff)
-            html = ConfluenceContent.get_diff_report_as_html(previous, current, report, url)
+        prev_file = os.path.join(path, "confluence-{}-{}.version".format(space, previous))
 
-            print "Updating Confluence with latest info..."
-            # TODO: Query for the page containing the version hist
-            version_history_id = "2785691"
-            provider.update_page(version_history_id, html)
+        print "Generating report in Confluence based on {} and {}...".format(current_file, prev_file)
+        provider.generate_report(current, previous, current_file, prev_file, whatif)
     else:
-        print "Previous version not supplied, nothing to diff"
+        print "Previous version not supplied, diff report will not be created"
 
 
 def cli_main():
-    docdiff()
+    cli(obj={})

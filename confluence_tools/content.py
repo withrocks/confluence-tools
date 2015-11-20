@@ -3,7 +3,7 @@ class ConfluenceContent:
     """Defines the content that will be created in Confluence"""
 
     @staticmethod
-    def get_diff_report_as_html(prev_version, curr_version, report, url):
+    def get_diff_report_as_html(curr_version, prev_version, report, url):
         html = []
         # TODO: Move to template files
         version_table = """
