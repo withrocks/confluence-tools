@@ -30,6 +30,7 @@ setup(
     keywords='development deployment release',
 
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
+    package_data={'confluence_tools': ['templates/*.html']},
     install_requires=['requests[security]', 'click', 'pyyaml', 'suds'],
 
     # $ pip install -e .[dev,test]

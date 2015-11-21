@@ -1,0 +1,41 @@
+{% if include_summary %}
+<table>
+    <tbody>
+    <tr>
+        <th>Current version</th>
+        <td colspan="1">{{ current }}</td>
+    </tr>
+    <tr>
+        <th colspan="1">Previous version</th>
+        <td colspan="1">{{ previous }}</td>
+    </tr>
+    </tbody>
+</table>
+{% endif %}
+
+{% if has_changes %}
+<table>
+    <tbody>
+    <tr>
+        <th>Page</th>
+        <th>Type</th>
+    </tr>
+    </tbody>
+    {% for row in changes %}
+    <tr>
+        <td>
+            <ac:link><ri:page ri:content-title="{{ row.title }}" /></ac:link>
+        </td>
+        <td>
+        {% if row.type == "changed" %}
+            <a href="{{ url }}/pages/diffpagesbyversion.action?pageId={{ row.id }}&amp;selectedPageVersions={{ row.version }}&amp;selectedPageVersions={{ row.previous }}">{{ row.type }}</a>
+        {% else %}
+            {{ row.type }}
+        {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<i>No changes</i>
+{% endif %}

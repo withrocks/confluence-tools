@@ -59,7 +59,6 @@ class ConfluenceProvider:
 
     @staticmethod
     def get_diff_report(current, previous):
-        # TODO: Find built-in for this
         def by_id(dictionary):
             return {item["id"]: item for item in dictionary}
 
@@ -70,13 +69,26 @@ class ConfluenceProvider:
         only_in_current = set(current_by_id.keys()) - set(previous_by_id.keys())
         only_in_previous = set(previous_by_id.keys()) - set(current_by_id.keys())
 
-        report = dict()
-        report["changed"] = [current_by_id[key] for key in both
-                             if current_by_id[key]["version"] != previous_by_id[key]["version"]]
-        report["new"] = [current_by_id[key] for key in only_in_current
-                         if key not in previous_by_id.keys()]
-        report["deleted"] = [previous_by_id[key] for key in only_in_previous
-                             if key not in current_by_id.keys()]
+        changed_tuples = [(current_by_id[key], previous_by_id[key]) for key in both
+                   if current_by_id[key]["version"] != previous_by_id[key]["version"]]
+        new = [current_by_id[key] for key in only_in_current
+               if key not in previous_by_id.keys()]
+        deleted = [previous_by_id[key] for key in only_in_previous
+                   if key not in current_by_id.keys()]
+
+        changed = []
+        for item in changed_tuples:
+            item[0]["type"] = "changed"
+            item[0]["previous"] = item[1]["version"]
+            changed.append(item[0])
+        for item in new:
+            item["type"] = "new"
+        for item in deleted:
+            item["type"] = "deleted"
+
+        # Determine previous versions:
+
+        report = changed + new + deleted
         return report
 
     def get_content_by_id(self, content_id, expand_body=False):
@@ -102,12 +114,10 @@ class ConfluenceProvider:
         self.logger.info("Generating diff report...")
         report = self.get_diff_report(curr_metadata, prev_metadata)
 
-        self.logger.info("  Changed: {}".format(len(report["changed"])))
-        self.logger.info("  New: {}".format(len(report["new"])))
-        self.logger.info("  Deleted: {}".format(len(report["deleted"])))
-
         self.logger.debug("Formatting diff report as html...")
-        html = ConfluenceContent.get_diff_report_as_html(current, previous, report, self.url)
+        content = ConfluenceContent()
+        html = content.get_diff_report_as_html(current, previous, report, self.url)
+        self.logger.debug("Generated html: {}".format(html))
 
         self.logger.info("Updating Confluence with latest info...")
         if not whatif:
