@@ -90,6 +90,12 @@ class ConfluenceProvider:
             return json.load(f)
 
     def generate_report(self, space, path, current, previous, whatif):
+        version_history_title = "Version History"
+        page = self.get_page(space, version_history_title)
+        if not page:
+            raise Exception("Missing page with title '{}'".format(version_history_title))
+        version_history_id = page["id"]
+
         prev_metadata = self._load_version_file(path, space, previous)
         curr_metadata = self._load_version_file(path, space, current)
 
@@ -109,7 +115,6 @@ class ConfluenceProvider:
             page = self.get_page(space, title)
 
             if not page:
-                version_history_id = "2785691"
                 self.create_page(title, space, version_history_id, html)
             else:
                 page_id = page["id"]
