@@ -14,6 +14,21 @@ class ConfluenceProvider:
         self.pwd = pwd
         self.logger = logger or logging.getLogger(__name__)
 
+    def create_page(self, title, space_key, parent, html):
+        data = {
+                    "type": "page",
+                    "title": title,
+                    "ancestors": [{"id": parent}],
+                    "space": {"key": space_key},
+                    "body": {
+                        "storage": {
+                            "value": html,
+                            "representation": "storage"}
+                    }
+                }
+        self._post("/rest/api/content/", data)
+
+
     def get_diff_meta_file(self, space_key):
         """
         Returns the diff history for a whole space from a particular time.
@@ -64,42 +79,63 @@ class ConfluenceProvider:
                              if key not in current_by_id.keys()]
         return report
 
-    def get_content(self, content_id, expand_body=False):
+    def get_content_by_id(self, content_id, expand_body=False):
         return self._get("/rest/api/content/{}{}".format(content_id, "?expand=body.storage" if expand_body else ""))
 
-    def generate_report(self, current_version, previous_version, current_metadata_path, previous_metadata_path, whatif):
-        with open(previous_metadata_path, 'r') as f:
-            previous_metadata = json.load(f)
+    def _get_version_file_path(self, root, space, version):
+        return os.path.join(root, "confluence-{}-{}.version".format(space, version))
 
-        with open(current_metadata_path, 'r') as f:
-            current_metadata = json.load(f)
+    def _load_version_file(self, root, space, version):
+        with open(self._get_version_file_path(root, space, version), 'r') as f:
+            return json.load(f)
 
-        print "Generating diff report..."
-        report = self.get_diff_report(current_metadata, previous_metadata)
+    def generate_report(self, space, path, current, previous, whatif):
+        prev_metadata = self._load_version_file(path, space, previous)
+        curr_metadata = self._load_version_file(path, space, current)
 
-        print "  Changed: {}".format(len(report["changed"]))
-        print "  New: {}".format(len(report["new"]))
-        print "  Deleted: {}".format(len(report["deleted"]))
+        self.logger.info("Generating diff report...")
+        report = self.get_diff_report(curr_metadata, prev_metadata)
 
-        print "Formatting diff report as html..."
-        html = ConfluenceContent.get_diff_report_as_html(current_version, previous_version, report, self.url)
+        self.logger.info("  Changed: {}".format(len(report["changed"])))
+        self.logger.info("  New: {}".format(len(report["new"])))
+        self.logger.info("  Deleted: {}".format(len(report["deleted"])))
 
-        print "Updating Confluence with latest info..."
-        # TODO: Query for the page containing the version hist
+        self.logger.debug("Formatting diff report as html...")
+        html = ConfluenceContent.get_diff_report_as_html(current, previous, report, self.url)
 
+        self.logger.info("Updating Confluence with latest info...")
         if not whatif:
-            version_history_id = "2785691"
-            self.update_page(version_history_id, html)
+            title = "Version {}".format(current)
+            page = self.get_page(space, title)
+
+            if not page:
+                version_history_id = "2785691"
+                self.create_page(title, space, version_history_id, html)
+            else:
+                page_id = page["id"]
+                self.update_page(page_id, html)
+        else:
+            self.logger.info("Whatif: Not updating page")
+
+    def get_page(self, space_key, title):
+        content = self._get("/rest/api/content", {"type": "page", "spaceKey": space_key, "title": title})
+        pages = content["results"]
+        length = len(pages)
+        assert length < 2
+        if length == 0:
+            return None
+        elif length == 1:
+            return pages[0]
 
     def update_page(self, content_id, html):
         print "Fetching last version of page with id={}...".format(content_id)
-        content = self.get_content(content_id)
+        # TODO: unecessary call to get_content, already did that
+        content = self.get_content_by_id(content_id)
         version = int(content["version"]["number"])
         print "Current version is {}".format(version)
         data = {
             "id": content_id,
             "type": "page",
-            "title": "Version History",
             "body": {
                 "storage": {
                     "value": html,
@@ -161,17 +197,23 @@ class ConfluenceProvider:
             else:
                 break
 
+    def _full_url(self, resource):
+        return "{}{}".format(self.url, resource)
+
     def _get(self, resource, params=None):
-        full_url = "{}{}".format(self.url, resource)
-        resp = requests.get(full_url, auth=(self.user, self.pwd), params=params)
+        resp = requests.get(self._full_url(resource), auth=(self.user, self.pwd), params=params)
         if resp.status_code == 200:
             return resp.json()
         else:
             raise Exception(resp.text)
 
     def _put(self, resource, data):
-        full_url = "{}{}".format(self.url, resource)
-        resp = requests.put(full_url, json=data, auth=(self.user, self.pwd))
+        resp = requests.put(self._full_url(resource), json=data, auth=(self.user, self.pwd))
+        if resp.status_code != 200:
+            raise Exception(resp.text)
+
+    def _post(self, resource, data):
+        resp = requests.post(self._full_url(resource), json=data, auth=(self.user, self.pwd))
         if resp.status_code != 200:
             raise Exception(resp.text)
 
