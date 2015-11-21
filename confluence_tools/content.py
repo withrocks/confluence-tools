@@ -26,7 +26,7 @@ class ConfluenceContent:
           <tbody>
             <tr>
               <th>Page</th>
-              <th>Change</th>
+              <th>Type</th>
             </tr>
           </tbody>
           {rows}
@@ -40,26 +40,34 @@ class ConfluenceContent:
             </ac:link>
           </td>
           <td>
-            <a href="{url}/pages/diffpagesbyversion.action?pageId={page_id}&amp;selectedPageVersions={curr}&amp;selectedPageVersions={prev}"> diff v{prev}..v{curr} </a>
+            {link}
           </td>
         </tr>
         """
 
-        html.append(version_table)
-        html.append("<h2>Changed</h2>")
+        link_to_change_templ = '<a href="{url}/pages/diffpagesbyversion.action?' + \
+                               'pageId={page_id}&amp;selectedPageVersions={curr}&amp;' + \
+                               'selectedPageVersions={prev}">changed</a>'
+
+        html.append("<h2>Edits</h2>")
         change_rows = []
-        for item in report["changed"]:
-            change_rows.append(change_row_templ.format(
-                content_title=item["title"],
-                url=url,
-                curr=2, prev=1, page_id=item["id"]))
+        for key in sorted(report.keys()):
+            for item in report[key]:
+                # TODO: Ignore Version pages in a better way
+                if not item["title"].startswith("Version "):
+                    curr = int(item["version"])
+                    prev = curr - 1  # TODO
+                    if key == "changed":
+                        link = link_to_change_templ.format(
+                            url=url, page_id=item["id"], curr=curr, prev=prev)
+                    else:
+                        link = key
+
+                    change_rows.append(change_row_templ.format(
+                        content_title=item["title"],
+                        link=link))
+
         change_rows_str = "".join(change_rows)
         html.append(change_table_templ.format(rows=change_rows_str))
-
-        """
-        html.append("<h2>Added</h2>")
-        for item in report["new"]:
-            html.append("<p>{}</p>".format(item["title"]))
-        """
 
         return "".join(html)
