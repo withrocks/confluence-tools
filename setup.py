@@ -31,7 +31,7 @@ setup(
 
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
     package_data={'confluence_tools': ['templates/*.html']},
-    install_requires=['requests[security]', 'click', 'pyyaml', 'suds'],
+    install_requires=['requests[security]', 'click', 'pyyaml', 'suds', 'jinja2'],
 
     # $ pip install -e .[dev,test]
     extras_require={
