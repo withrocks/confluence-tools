@@ -1,13 +1,13 @@
-#!/usr/bin/env python
+import logging
 import os
 import requests
-import json
-from content import ConfluenceContent
 import suds.client
-import logging
 
 
 class ConfluenceProvider:
+    """
+    Provides access to the Confluence APIs
+    """
     def __init__(self, url, user, pwd, logger=None):
         self.url = url
         self.user = user
@@ -15,6 +15,7 @@ class ConfluenceProvider:
         self.logger = logger or logging.getLogger(__name__)
 
     def create_page(self, title, space_key, parent, html):
+        """Creates a page with the content ``html``"""
         data = {
                     "type": "page",
                     "title": title,
@@ -28,14 +29,10 @@ class ConfluenceProvider:
                 }
         self._post("/rest/api/content/", data)
 
-    def get_space_id_from_key(self, key):
-        spaces = self.get_spaces()
-        res = [result["id"] for result in spaces if result["key"] == key]
-        assert len(res) == 1
-        return res[0]
-
     def get_space_content_history(self, space_key):
-        pages = list(self._get_paged("/rest/api/space/{}/content".format(space_key, ""), {"expand": "version"}))
+        """Returns the content for a space, including version information"""
+        pages = list(self._get_paged("/rest/api/space/{}/content".format(space_key, ""),
+                                     {"expand": "version"}))
         for page in pages:
             for result in page["results"]:
                 yield {
@@ -46,82 +43,17 @@ class ConfluenceProvider:
                 }
 
     def get_spaces(self):
+        """Returns all spaces in Confluence"""
+        # TODO: Paging is probably necessary
         return self._get("/rest/api/space")["results"]
 
-    @staticmethod
-    def get_diff_report(current, previous):
-        def by_id(dictionary):
-            return {item["id"]: item for item in dictionary}
-
-        current_by_id = by_id(current)
-        previous_by_id = by_id(previous)
-
-        both = set(current_by_id.keys()) & set(previous_by_id.keys())
-        only_in_current = set(current_by_id.keys()) - set(previous_by_id.keys())
-        only_in_previous = set(previous_by_id.keys()) - set(current_by_id.keys())
-
-        changed_tuples = [(current_by_id[key], previous_by_id[key]) for key in both
-                          if current_by_id[key]["version"] != previous_by_id[key]["version"]]
-        new = [current_by_id[key] for key in only_in_current
-               if key not in previous_by_id.keys()]
-        deleted = [previous_by_id[key] for key in only_in_previous
-                   if key not in current_by_id.keys()]
-
-        changed = []
-        for item in changed_tuples:
-            item[0]["type"] = "changed"
-            item[0]["previous"] = item[1]["version"]
-            changed.append(item[0])
-        for item in new:
-            item["type"] = "new"
-        for item in deleted:
-            item["type"] = "deleted"
-
-        report = changed + new + deleted
-        return report
-
     def get_content_by_id(self, content_id, expand_body=False):
-        return self._get("/rest/api/content/{}{}".format(content_id, "?expand=body.storage" if expand_body else ""))
-
-    def _get_version_file_path(self, root, space, version):
-        return os.path.join(root, "confluence-{}-{}.version".format(space, version))
-
-    def _load_version_file(self, root, space, version):
-        with open(self._get_version_file_path(root, space, version), 'r') as f:
-            return json.load(f)
-
-    def generate_report(self, space, path, current, previous, whatif):
-        version_history_title = "Version History"
-        page = self.get_page(space, version_history_title)
-        if not page:
-            raise Exception("Missing page with title '{}'".format(version_history_title))
-        version_history_id = page["id"]
-
-        prev_metadata = self._load_version_file(path, space, previous)
-        curr_metadata = self._load_version_file(path, space, current)
-
-        self.logger.info("Generating diff report...")
-        report = self.get_diff_report(curr_metadata, prev_metadata)
-
-        self.logger.debug("Formatting diff report as html...")
-        content = ConfluenceContent()
-        html = content.get_diff_report_as_html(current, previous, report, self.url)
-        self.logger.debug("Generated html: {}".format(html))
-
-        self.logger.info("Updating Confluence with latest info...")
-        if not whatif:
-            title = "Version {}".format(current)
-            page = self.get_page(space, title)
-
-            if not page:
-                self.create_page(title, space, version_history_id, html)
-            else:
-                page_id = page["id"]
-                self.update_page(page_id, html)
-        else:
-            self.logger.info("Whatif: Not updating page")
+        """Returns the content of the particular page"""
+        return self._get("/rest/api/content/{}{}".format(
+            content_id, "?expand=body.storage" if expand_body else ""))
 
     def get_page(self, space_key, title):
+        """Returns a page by title"""
         content = self._get("/rest/api/content", {"type": "page", "spaceKey": space_key, "title": title})
         pages = content["results"]
         length = len(pages)
@@ -132,6 +64,7 @@ class ConfluenceProvider:
             return pages[0]
 
     def update_page(self, content_id, html):
+        """Updates content by content_id"""
         print "Fetching last version of page with id={}...".format(content_id)
         # TODO: unecessary call to get_content, already did that
         content = self.get_content_by_id(content_id)
@@ -152,6 +85,7 @@ class ConfluenceProvider:
         print "Successfully updated page with id={}".format(content_id)
 
     def export_space(self, space, local_path=None):
+        """Exports a space as pdf"""
         logging.info("Exporting space '{}'".format(space))
         client = self._soap_client("/rpc/soap-axis/pdfexport?wsdl")
         token = client.service.login(self.user, self.pwd)
@@ -163,11 +97,11 @@ class ConfluenceProvider:
         if not local_path:
             local_path = url.split('/')[-1]
         logging.info("Downloading exported pdf to '{}'".format(local_path))
-        self.download_file(url, local_path, self.user, self.pwd)
+        self._download_file(url, local_path, self.user, self.pwd)
         logging.info("File successfully downloaded")
 
     @staticmethod
-    def download_file(url, local_path=None, user=None, pwd=None):
+    def _download_file(url, local_path=None, user=None, pwd=None):
         r = requests.get(url, stream=True, auth=(user, pwd))
         if r.status_code == 403:
             raise Exception("Access denied for '{}': {}".format(url, r.text))

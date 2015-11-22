@@ -1,7 +1,6 @@
 import click
 from confluence_tools.main import ConfluenceProvider
-import os
-import json
+from confluence_tools.workflow import Workflow
 import yaml
 import logging
 
@@ -57,23 +56,8 @@ def space_report(ctx, current, space, previous, path):
     """
     whatif = ctx.obj["whatif"]
     provider = ConfluenceProvider(ctx.obj["url"], ctx.obj["user"], ctx.obj["pwd"])
-
-    current_metadata_file = os.path.join(path, "confluence-{}-{}.version".format(space, current))
-    if os.path.isfile(current_metadata_file):
-        print "Previous metadata already exists for {} at {}".format(current, current_metadata_file)
-    else:
-        print "Determining the metadata for version={},space={}...".format(current, space)
-        current_metadata = list(provider.get_space_content_history(space))
-        print "Saving metadata in '{}'".format(current_metadata_file)
-
-        if not whatif:
-            with open(current_metadata_file, 'w') as f:
-                json.dump(current_metadata, f, sort_keys=True, indent=4)
-
-    if previous:
-        provider.generate_report(space, path, current, previous, whatif)
-    else:
-        print "Previous version not supplied, diff report will not be created"
+    workflow = Workflow(provider, whatif)
+    workflow.generate_metadata_and_upload(path, space, current, previous)
 
 
 @cli.command("space-export", help="Exports the space as a pdf.")
