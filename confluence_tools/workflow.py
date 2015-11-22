@@ -3,17 +3,19 @@ import os
 from confluence_tools.content import ConfluenceContent
 import logging
 
+
 class Workflow:
     """
     Defines top-level actions in the documentation workflow
     """
-    def __init__(self, provider, whatif, logger=None):
+    def __init__(self, provider, whatif, msg, logger=None):
         """
         Initializes the workflow with a provider that looks like
         a ConfluenceProvider
         """
         self.provider = provider
         self.whatif = whatif
+        self.msg = msg
         self.logger = logger or logging.getLogger(__name__)
 
     def generate_metadata_and_upload(self, path, space, current, previous):
@@ -23,18 +25,19 @@ class Workflow:
 
         if previous:
             self._upload_report(space, path, current, previous)
+            self.msg("Report has been uploaded")
         else:
-            print "Previous version not supplied, diff report will not be created"
+            self.msg("Previous version not supplied, diff report will not be created")
 
     def _generate_metadata_file(self, path, space, current):
         current_metadata_file = self._get_version_file_path(path, space, current)
         if os.path.isfile(current_metadata_file):
-            print "A metadata already exists for {} at {}".format(
-                current, current_metadata_file)
+            self.msg("A metadata already exists for {} at {}".format(
+                current, current_metadata_file))
         else:
-            print "Determining the metadata for version={},space={}...".format(current, space)
+            self.msg("Determining the metadata for version={},space={}...".format(current, space))
             current_metadata = list(self.provider.get_space_content_history(space))
-            print "Saving metadata in '{}'".format(current_metadata_file)
+            self.msg("Saving metadata in '{}'".format(current_metadata_file))
 
             if not self.whatif:
                 with open(current_metadata_file, 'w') as f:

@@ -54,9 +54,12 @@ def space_report(ctx, current, space, previous, path):
 
     Metadata files exist at ``path``
     """
+    def user_msg(msg):
+        print msg
+
     whatif = ctx.obj["whatif"]
     provider = ConfluenceProvider(ctx.obj["url"], ctx.obj["user"], ctx.obj["pwd"])
-    workflow = Workflow(provider, whatif)
+    workflow = Workflow(provider, whatif, user_msg)
     workflow.generate_metadata_and_upload(path, space, current, previous)
 
 

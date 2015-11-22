@@ -13,7 +13,6 @@ class ConfluenceContent:
                                      trim_blocks=True, lstrip_blocks=True)
 
     def get_diff_report_as_html(self, curr_version, prev_version, report, url):
-        print report
         template = self.jinja_env.get_template('report.html')
         return template.render(include_summary=False,
                                has_changes=len(report) > 0,

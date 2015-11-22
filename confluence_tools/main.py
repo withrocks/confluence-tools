@@ -65,11 +65,9 @@ class ConfluenceProvider:
 
     def update_page(self, content_id, html):
         """Updates content by content_id"""
-        print "Fetching last version of page with id={}...".format(content_id)
         # TODO: unecessary call to get_content, already did that
         content = self.get_content_by_id(content_id)
         version = int(content["version"]["number"])
-        print "Current version is {}".format(version)
         data = {
             "id": content_id,
             "type": "page",
@@ -82,7 +80,6 @@ class ConfluenceProvider:
             "version": {"number": version + 1}
         }
         self._put("/rest/api/content/{}".format(content_id), data)
-        print "Successfully updated page with id={}".format(content_id)
 
     def export_space(self, space, local_path=None):
         """Exports a space as pdf"""
@@ -120,7 +117,7 @@ class ConfluenceProvider:
 
     def _get_paged(self, resource, params):
         while True:
-            print "Fetching a page..."
+            self.logger.debug("Fetching a page...")
             res = self._get(resource, params)
             if "page" in res:
                 page = res["page"]
