@@ -28,15 +28,6 @@ class ConfluenceProvider:
                 }
         self._post("/rest/api/content/", data)
 
-
-    def get_diff_meta_file(self, space_key):
-        """
-        Returns the diff history for a whole space from a particular time.
-        This can be used to generate documentation from the space
-        including
-        """
-        return self.get_space_content_history(space_key)
-
     def get_space_id_from_key(self, key):
         spaces = self.get_spaces()
         res = [result["id"] for result in spaces if result["key"] == key]
@@ -70,7 +61,7 @@ class ConfluenceProvider:
         only_in_previous = set(previous_by_id.keys()) - set(current_by_id.keys())
 
         changed_tuples = [(current_by_id[key], previous_by_id[key]) for key in both
-                   if current_by_id[key]["version"] != previous_by_id[key]["version"]]
+                          if current_by_id[key]["version"] != previous_by_id[key]["version"]]
         new = [current_by_id[key] for key in only_in_current
                if key not in previous_by_id.keys()]
         deleted = [previous_by_id[key] for key in only_in_previous
@@ -85,8 +76,6 @@ class ConfluenceProvider:
             item["type"] = "new"
         for item in deleted:
             item["type"] = "deleted"
-
-        # Determine previous versions:
 
         report = changed + new + deleted
         return report

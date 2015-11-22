@@ -58,17 +58,17 @@ def space_report(ctx, current, space, previous, path):
     whatif = ctx.obj["whatif"]
     provider = ConfluenceProvider(ctx.obj["url"], ctx.obj["user"], ctx.obj["pwd"])
 
-    current_file = os.path.join(path, "confluence-{}-{}.version".format(space, current))
-    if os.path.isfile(current_file):
-        print "Previous metadata already exists for {} at {}".format(current, current_file)
+    current_metadata_file = os.path.join(path, "confluence-{}-{}.version".format(space, current))
+    if os.path.isfile(current_metadata_file):
+        print "Previous metadata already exists for {} at {}".format(current, current_metadata_file)
     else:
         print "Determining the metadata for version={},space={}...".format(current, space)
-        current_diff = list(provider.get_diff_meta_file(space))
-        print "Saving metadata in '{}'".format(current_file)
+        current_metadata = list(provider.get_space_content_history(space))
+        print "Saving metadata in '{}'".format(current_metadata_file)
 
         if not whatif:
-            with open(current_file, 'w') as f:
-                json.dump(current_diff, f, sort_keys=True, indent=4)
+            with open(current_metadata_file, 'w') as f:
+                json.dump(current_metadata, f, sort_keys=True, indent=4)
 
     if previous:
         provider.generate_report(space, path, current, previous, whatif)
