@@ -32,7 +32,7 @@ class Workflow:
     def _generate_metadata_file(self, path, space, current):
         current_metadata_file = self._get_version_file_path(path, space, current)
         if os.path.isfile(current_metadata_file):
-            self.msg("A metadata already exists for {} at {}".format(
+            self.msg("A metadata file already exists for {} at {}".format(
                 current, current_metadata_file))
         else:
             self.msg("Determining the metadata for version={},space={}...".format(current, space))

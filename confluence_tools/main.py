@@ -65,11 +65,12 @@ class ConfluenceProvider:
 
     def update_page(self, content_id, html):
         """Updates content by content_id"""
-        # TODO: unecessary call to get_content, already did that
+        # TODO: unnecessary call to get_content, already did that
         content = self.get_content_by_id(content_id)
         version = int(content["version"]["number"])
         data = {
             "id": content_id,
+            "title": content["title"],
             "type": "page",
             "body": {
                 "storage": {
